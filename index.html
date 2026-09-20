@@ -1,0 +1,2008 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flappy Bee — Mobile Landscape Edition</title>
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#87CEEB">
+<link rel="manifest" href="./manifest.webmanifest">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{overflow:hidden;background:#87CEEB;font-family:Arial,sans-serif}
+#gameCanvas{display:block}
+#instructions,#health,#status{
+    position:fixed;left:20px;color:white;font-weight:bold;
+    text-shadow:2px 2px 3px #000;z-index:10
+}
+#instructions{top:20px;background:rgba(0,0,0,.65);padding:12px 18px;border-radius:10px;font-size:16px}
+#health{top:78px;font-size:18px}
+#status{top:110px;font-size:16px}
+#message{
+    position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+    color:white;font-size:34px;font-weight:bold;text-shadow:2px 2px 5px #000;
+    display:none;z-index:20;text-align:center
+}
+
+/* =====================================================
+   MOBILE / LANDSCAPE GAME CONTROLS
+   ===================================================== */
+html,body{width:100%;height:100%;touch-action:none}
+body{user-select:none;-webkit-user-select:none}
+#gameCanvas{width:100vw;height:100vh}
+#mobileControls{
+    position:fixed;inset:0;z-index:30;pointer-events:none;
+    display:none;
+}
+.controlZone{position:absolute;bottom:18px;pointer-events:auto}
+#flyZone{left:18px}
+#aimZone{right:18px}
+.gameButton{
+    width:clamp(88px,14vw,138px);
+    height:clamp(88px,14vw,138px);
+    border-radius:50%;
+    border:3px solid rgba(255,255,255,.78);
+    background:rgba(18,35,45,.48);
+    box-shadow:0 8px 25px rgba(0,0,0,.28), inset 0 0 0 2px rgba(255,255,255,.12);
+    color:#fff;font-weight:900;letter-spacing:1px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:clamp(16px,2.5vw,24px);
+    -webkit-tap-highlight-color:transparent;
+    backdrop-filter:blur(5px);
+}
+#flyButton{background:rgba(24,120,70,.58)}
+#fireButton{background:rgba(170,55,35,.58);position:relative}
+#aimKnob{
+    position:absolute;left:50%;top:50%;width:34%;height:34%;
+    transform:translate(-50%,-50%);
+    border-radius:50%;border:2px solid rgba(255,255,255,.75);
+    background:rgba(255,220,80,.9);box-shadow:0 0 18px rgba(255,210,50,.6);
+    pointer-events:none;
+}
+#aimArrow{
+    position:absolute;left:50%;top:50%;width:42%;height:5px;
+    transform-origin:0 50%;border-radius:8px;background:#fff;
+    box-shadow:0 0 8px rgba(255,255,255,.8);
+    pointer-events:none;
+}
+#aimArrow:after{
+    content:"";position:absolute;right:-5px;top:-5px;
+    border-left:10px solid #fff;border-top:7px solid transparent;border-bottom:7px solid transparent;
+}
+#rotateHint{
+    position:absolute;right:24px;bottom:calc(clamp(88px,14vw,138px) + 28px);
+    color:rgba(255,255,255,.9);font-weight:800;font-size:12px;
+    text-shadow:1px 1px 3px #000;pointer-events:none;text-align:center;
+}
+#orientationNotice{
+    position:fixed;inset:0;z-index:-1;background:#10252a;color:white;
+    display:none;align-items:center;justify-content:center;text-align:center;
+    padding:30px;font-size:22px;font-weight:800;
+}
+#orientationNotice span{font-size:50px;display:block;margin-bottom:15px}
+@media (pointer:coarse), (max-width:900px){
+    #mobileControls{display:block}
+    #instructions{font-size:12px;top:10px;left:10px;padding:8px 10px;max-width:54vw}
+    #health{top:55px;left:10px;font-size:14px}
+    #status{top:80px;left:10px;font-size:12px;max-width:55vw}
+    #score{right:10px!important;top:10px!important;font-size:13px!important;max-width:42vw;text-align:right}
+}
+/* Portrait is supported as a fallback. Landscape is preferred, but the game
+   must never be blocked by an orientation overlay (important for iPhone
+   Files/Quick Look and browsers that do not allow orientation locking). */
+@media (orientation:portrait) and (max-width:900px){
+    #orientationNotice{display:none}
+    #mobileControls{display:block}
+    #flyZone,#aimZone{bottom:14px}
+    #instructions{max-width:48vw}
+}
+@media (orientation:landscape) and (max-height:520px){
+    #flyZone,#aimZone{bottom:10px}
+    #rotateHint{bottom:calc(clamp(88px,14vw,138px) + 12px)}
+}
+
+</style>
+</head>
+<body>
+<div id="instructions">🐝 FLY: Space / left button &nbsp; • &nbsp; AIM + FIRE: mouse / right control &nbsp; • &nbsp; LANDSCAPE preferred</div>
+<div id="health"></div>
+<div id="status"></div>
+<div id="score" style="position:fixed;right:20px;top:20px;color:white;font-weight:bold;font-size:18px;text-shadow:2px 2px 3px #000;z-index:10"></div>
+<div id="message"></div>
+<canvas id="gameCanvas"></canvas>
+
+<div id="orientationNotice"><div><span>📱↻</span>Please rotate your phone<br>to <b>LANDSCAPE</b> to play.</div></div>
+<div id="mobileControls">
+  <div id="flyZone" class="controlZone">
+    <button id="flyButton" class="gameButton" type="button">🐝 FLY</button>
+  </div>
+  <div id="aimZone" class="controlZone">
+    <div id="rotateHint">DRAG ↻ / ↺ TO AIM</div>
+    <button id="fireButton" class="gameButton" type="button" aria-label="Aim and fire">
+      <span id="aimKnob"></span><span id="aimArrow"></span>🔥 FIRE
+    </button>
+  </div>
+</div>
+
+
+<script>
+// =====================================================
+// 1. CANVAS
+// =====================================================
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+function resizeCanvas(){
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    if(!gameStarted){
+        bee.x = Math.min(250, canvas.width * 0.35);
+        bee.y = canvas.height * 0.5;
+    }
+}
+window.addEventListener("resize", resizeCanvas);
+
+// =====================================================
+// 2. BEE
+// =====================================================
+const bee = {
+    x:250, y:300, width:60, height:40,
+    velocityY:0, gravity:.5, jumpPower:-8,
+    health:5, maxHealth:5, hitCooldown:0
+};
+
+// =====================================================
+// 3. HORNET NEMESIS
+// =====================================================
+const hornet = {
+    x:900, y:300, width:70, height:45,
+    health:5, maxHealth:5, alive:true,
+    state:"CHASE",
+    chaseSpeed:1.4,
+    attackSpeed:7,
+    attackTimer:0,
+    attackCooldown:120,
+    attackDirectionX:0,
+    attackDirectionY:0,
+    hitCooldown:0
+};
+
+// =====================================================
+// 4. SPIDER NEMESIS
+// Cannot be killed. It only attacks and must be avoided.
+// =====================================================
+const spider = {
+    active:false,
+    side:"top",                 // "top" or "bottom"
+    state:"HIDDEN",              // HIDDEN, WARNING, REVEAL, SWING, LUNGE, RETREAT
+    x:0,
+    anchorX:0,
+    anchorY:0,
+    y:0,
+    webRadius:110,
+    threadLength:130,
+    swingTime:0,
+    swingSpeed:.055,
+    swingAmount:90,
+    warningTimer:0,
+    revealTimer:0,
+    lungeTimer:0,
+    retreatTimer:0,
+    cooldown:60,
+    attackSpeed:8,
+    maxHealth:5,
+    health:5,
+    width:72,
+    height:72
+};
+
+
+// =====================================================
+// 5. RED WASP SWARM NEMESIS
+// Thin red wasps arrive as a group from the right.
+// One sting kills one wasp. They cannot be ignored:
+// touching a wasp costs one bee health.
+// =====================================================
+const waspSwarm = {
+    active:false,
+    wasps:[],
+    cooldown:420,
+    spawnTimer:0,
+    speed:3.4,
+    spacing:72,
+    rows:4,
+    cols:5,
+    count:20,
+    kills:0,
+    spiderTriggered:false,
+    spiderScheduled:false
+};
+
+// =====================================================
+// 6. VENUS FLYTRAP OBSTACLES
+// The old pipe-style obstacle space is replaced by pairs of living
+// Venus flytraps. They move from right to left while the bee flies
+// through the opening between their mouths.
+// =====================================================
+const flytraps = [];
+const flytrapSystem = {
+    speed: 3.2,
+    spawnEvery: 145,
+    spawnTimer: 70,
+    minGap: 430,
+    maxGap: 520,
+    width: 155,
+    passed: 0
+};
+
+// =====================================================
+// 7. MOUSE / STINGS
+// =====================================================
+const mouse = {x:bee.x+200,y:bee.y};
+const stings = [];
+let firing = false;
+let fireCooldown = 0;
+const FIRE_INTERVAL = 5; // rapid but controllable firing
+const STING_SPEED = 18;
+const STING_GRAVITY = 0.045;
+const STING_DRAG = 0.998;
+
+const message = document.getElementById("message");
+const healthDisplay = document.getElementById("health");
+const statusDisplay = document.getElementById("status");
+const scoreDisplay = document.getElementById("score");
+
+let gameStarted = true;
+let gameOver = false;
+let frame = 0;
+let playFrame = 0;
+let loopEvent = -1;
+let score = 0;
+let distance = 0;
+const LOOP_FRAMES = 360 * 60; // 6 minutes at 60 FPS
+const POWERUP_DURATION = 11 * 60; // magical ring lasts 11 seconds
+const powerUps = [];
+// Hearts are deliberately spaced out so health recovery helps survival
+// without removing the danger of the nemesis/obstacle system.
+// First heart arrives at 45s; subsequent hearts are roughly 90s apart.
+const powerUpSchedule = [
+    {time:45,  type:"heart"},
+    {time:135, type:"heart"},
+    {time:225, type:"heart"},
+    {time:315, type:"heart"},
+    {time:405, type:"heart"},
+    {time:495, type:"heart"}
+];
+let powerUpEvent = -1;
+let ringActiveUntil = 0;
+let firstRingGiven = false;
+let nextRingScore = 5000;
+let ringMilestone = 0;
+const RING_INTERVAL_SCORE = 5000;
+
+// =====================================================
+// 7. INPUT — DESKTOP + MOBILE
+// =====================================================
+const aim = {
+    angle: 0,
+    radius: 1,
+    touchActive: false
+};
+
+function setAimFromPoint(clientX, clientY){
+    const cx=bee.x+bee.width*0.5;
+    const cy=bee.y+bee.height*0.5;
+    const dx=clientX-cx, dy=clientY-cy;
+    if(Math.hypot(dx,dy)>4){
+        aim.angle=Math.atan2(dy,dx);
+        mouse.x=clientX;
+        mouse.y=clientY;
+    }
+}
+
+canvas.addEventListener("mousemove", e=>{
+    setAimFromPoint(e.clientX,e.clientY);
+});
+
+canvas.addEventListener("mousedown", e=>{
+    if(gameOver){ restartGame(); return; }
+    gameStarted=true;
+    firing=true;
+    setAimFromPoint(e.clientX,e.clientY);
+    fireSting();
+});
+
+window.addEventListener("mouseup", ()=>{ firing=false; });
+
+canvas.addEventListener("mouseleave", ()=>{ firing=false; });
+
+document.addEventListener("keydown", e=>{
+    if(e.code==="Space"){
+        e.preventDefault();
+        if(gameOver){ restartGame(); return; }
+        gameStarted=true;
+        bee.velocityY=bee.jumpPower;
+    }
+    if(e.code==="ArrowLeft"){ aim.angle-=0.10; }
+    if(e.code==="ArrowRight"){ aim.angle+=0.10; }
+    if(e.code==="Enter"){
+        if(gameOver) restartGame();
+        else {gameStarted=true; firing=true; fireSting();}
+    }
+});
+
+// Prevent browser scrolling/zooming while using the game controls.
+document.addEventListener("touchmove", e=>{
+    if(e.target.closest("#mobileControls") || e.target===canvas) e.preventDefault();
+},{passive:false});
+
+const flyButton=document.getElementById("flyButton");
+const fireButton=document.getElementById("fireButton");
+const aimArrow=document.getElementById("aimArrow");
+
+function flyPress(e){
+    e.preventDefault();
+    if(gameOver){restartGame();return;}
+    gameStarted=true;
+    bee.velocityY=bee.jumpPower;
+}
+flyButton.addEventListener("pointerdown", flyPress);
+
+function updateAimControl(clientX,clientY){
+    const r=fireButton.getBoundingClientRect();
+    const cx=r.left+r.width/2, cy=r.top+r.height/2;
+    const dx=clientX-cx, dy=clientY-cy;
+    const d=Math.hypot(dx,dy);
+    if(d>5){
+        aim.angle=Math.atan2(dy,dx);
+        aim.radius=Math.min(1,d/(r.width*.42));
+        aimArrow.style.transform=`rotate(${aim.angle}rad)`;
+    }
+}
+
+fireButton.addEventListener("pointerdown",e=>{
+    e.preventDefault();
+    if(gameOver){restartGame();return;}
+    gameStarted=true;
+    aim.touchActive=true;
+    fireButton.setPointerCapture?.(e.pointerId);
+    updateAimControl(e.clientX,e.clientY);
+    firing=true;
+    fireSting();
+});
+fireButton.addEventListener("pointermove",e=>{
+    if(!aim.touchActive)return;
+    e.preventDefault();
+    updateAimControl(e.clientX,e.clientY);
+});
+function endFire(e){
+    aim.touchActive=false;
+    firing=false;
+    try{fireButton.releasePointerCapture?.(e.pointerId)}catch(_){}
+}
+fireButton.addEventListener("pointerup",endFire);
+fireButton.addEventListener("pointercancel",endFire);
+fireButton.addEventListener("pointerleave",e=>{
+    if(!aim.touchActive)return;
+});
+
+// Landscape-first: ask the browser to lock landscape when supported.
+// This is strictly best-effort: the game remains playable if iOS/Safari/Files
+// refuses orientation locking. We intentionally do NOT require fullscreen.
+async function requestLandscape(){
+    try{
+        if(screen.orientation?.lock) await screen.orientation.lock("landscape");
+    }catch(_){}
+}
+flyButton.addEventListener("pointerdown",requestLandscape,{once:true});
+fireButton.addEventListener("pointerdown",requestLandscape,{once:true});
+
+// Aim indicator on the canvas follows the mobile radial control too.
+function syncAimMouseToAngle(){
+    const cx=bee.x+bee.width*.5, cy=bee.y+bee.height*.5;
+    const len=Math.max(canvas.width,canvas.height)*.55;
+    mouse.x=cx+Math.cos(aim.angle)*len;
+    mouse.y=cy+Math.sin(aim.angle)*len;
+}
+
+// =====================================================
+// 8. HELPERS
+// =====================================================
+function getDistance(x1,y1,x2,y2){
+    return Math.hypot(x1-x2,y1-y2);
+}
+
+function clamp(v,min,max){
+    return Math.max(min,Math.min(max,v));
+}
+
+// =====================================================
+// 9. FIRE STING
+// =====================================================
+function fireSting(){
+    const angle=aim.angle;
+    const distance=1;
+    // A tiny organic spread prevents the weapon from feeling like a perfect laser.
+    const spread=(Math.random()-0.5)*0.045;
+    const a=angle+spread;
+
+    stings.push({
+        x:bee.x+bee.width*0.5,
+        y:bee.y+bee.height*0.5,
+        velocityX:Math.cos(a)*STING_SPEED,
+        velocityY:Math.sin(a)*STING_SPEED,
+        radius:5,
+        life:0,
+        maxLife:90
+    });
+}
+
+// =====================================================
+// 10. BEE
+// =====================================================
+function updateBee(){
+    bee.velocityY+=bee.gravity;
+    bee.y+=bee.velocityY;
+
+    if(bee.y<25){
+        bee.y=25;
+        bee.velocityY=0;
+    }
+
+    if(bee.y+bee.height>canvas.height-25){
+        bee.y=canvas.height-25-bee.height;
+        bee.velocityY=0;
+    }
+
+    if(bee.hitCooldown>0)bee.hitCooldown--;
+}
+
+// =====================================================
+// 11. HORNET AI
+// =====================================================
+function updateHornet(){
+    if(!hornet.alive)return;
+
+    if(isRingActive() && getDistance(bee.x,bee.y,hornet.x,hornet.y)<105){
+        hornet.alive=false;
+        hornet.state="DEFEATED";
+        score+=500;
+        return;
+    }
+
+    if(hornet.attackTimer>0)hornet.attackTimer--;
+    if(hornet.hitCooldown>0)hornet.hitCooldown--;
+
+    if(hornet.state==="CHASE"){
+        if(hornet.x>bee.x+170)hornet.x-=hornet.chaseSpeed;
+
+        if(hornet.y<bee.y-10)hornet.y+=.8;
+        else if(hornet.y>bee.y+10)hornet.y-=.8;
+
+        const d=getDistance(hornet.x,hornet.y,bee.x,bee.y);
+
+        if(d<350 && hornet.attackTimer<=0)startHornetAttack();
+    }
+    else if(hornet.state==="ATTACK"){
+        hornet.x+=hornet.attackDirectionX*hornet.attackSpeed;
+        hornet.y+=hornet.attackDirectionY*hornet.attackSpeed;
+
+        if(hornet.hitCooldown<=0 && checkBeeHornetCollision()){
+            damageBee();
+            hornet.state="RETREAT";
+            hornet.attackTimer=80;
+        }
+
+        if(hornet.x<40){
+            hornet.x=canvas.width-120;
+            hornet.y=clamp(bee.y,80,canvas.height-120);
+            hornet.state="CHASE";
+            hornet.attackTimer=hornet.attackCooldown;
+        }
+    }
+    else if(hornet.state==="RETREAT"){
+        hornet.x+=2.5;
+        hornet.y-=.4;
+
+        if(hornet.attackTimer<=0)hornet.state="CHASE";
+    }
+}
+
+function startHornetAttack(){
+    hornet.state="ATTACK";
+    const dx=bee.x-hornet.x;
+    const dy=bee.y-hornet.y;
+    const d=Math.hypot(dx,dy)||1;
+    hornet.attackDirectionX=dx/d;
+    hornet.attackDirectionY=dy/d;
+}
+
+function checkBeeHornetCollision(){
+    return getDistance(bee.x,bee.y,hornet.x,hornet.y)<55;
+}
+
+// =====================================================
+// 12. SPIDER SPAWNING
+// =====================================================
+function spawnSpider(){
+    if(spider.active || gameOver)return;
+    spider.cooldown=0;
+
+    spider.active=true;
+    spider.health=spider.maxHealth;
+    spider.side=Math.random()<.5 ? "top" : "bottom";
+    spider.state="WARNING";
+    spider.warningTimer=70;      // about 1.1 seconds
+    spider.revealTimer=0;
+    spider.lungeTimer=0;
+    spider.retreatTimer=0;
+    spider.swingTime=0;
+
+    spider.anchorX=clamp(
+        bee.x + 220 + Math.random()*220,
+        180,
+        canvas.width-120
+    );
+
+    spider.anchorY = spider.side==="top" ? 25 : canvas.height-25;
+
+    // The spider can now descend/rise deep into the play area —
+    // almost to the middle of the screen — but not so far that the
+    // player loses the ability to read and dodge the attack.
+    spider.threadLength=Math.min(0.47*canvas.height, Math.max(180, canvas.height*0.42));
+
+    spider.x=spider.anchorX;
+    spider.y=spider.side==="top" ? -70 : canvas.height+70;
+}
+
+// =====================================================
+// 13. TWO-MINUTE NEMESIS SCHEDULE
+// =====================================================
+// The first minute introduces each nemesis separately.
+// The second minute brings them back and then combines two at once.
+// Nothing new is introduced after that: the 120-second pattern repeats.
+function updateNemesisSchedule(){
+    if(!gameStarted || gameOver)return;
+
+    // Six-minute encounter choreography. Mechanics are all introduced in
+    // minute 1; later minutes only increase frequency, speed and combinations.
+    const t=playFrame % LOOP_FRAMES;
+    const events={
+        600:'H',        // 0:10 Hornet
+        1500:'W',       // 0:25 Wasps
+        2400:'S',       // 0:40 Spider
+        3300:'HW',      // 0:55 Hornet + Wasps
+        4200:'SH',      // 1:10 Spider + Hornet
+        5100:'WS',      // 1:25 Wasps + Spider
+        6000:'H',       // 1:40 Hornet
+        6900:'W',       // 1:55 Wasps
+        7800:'S',       // 2:10 Spider
+        8700:'HW',      // 2:25 Hornet + Wasps
+        9600:'WS',      // 2:40 Wasps + Spider
+        10500:'SH',     // 2:55 Spider + Hornet
+        11400:'HW',     // 3:10 Hornet + Wasps
+        12300:'WS',     // 3:25 Wasps + Spider
+        13200:'SH',     // 3:40 Spider + Hornet
+        14100:'H',      // 3:55 Hornet
+        15000:'W',      // 4:10 Wasps
+        15900:'S',      // 4:25 Spider
+        16800:'HW',     // 4:40 Hornet + Wasps
+        17700:'WS',     // 4:55 Wasps + Spider
+        18600:'SH',     // 5:10 Spider + Hornet
+        19500:'HW',     // 5:25 Hornet + Wasps
+        20400:'WS',     // 5:40 Wasps + Spider
+        21300:'SH'      // 5:55 Spider + Hornet
+    };
+
+    const event=events[t];
+    if(!event || loopEvent===t)return;
+    loopEvent=t;
+
+    if(event==='H') startHornetEncounter();
+    else if(event==='W') spawnWaspSwarm(false);
+    else if(event==='S') spawnSpider();
+    else if(event==='HW'){ startHornetEncounter(); spawnWaspSwarm(false); }
+    else if(event==='SH'){ spawnSpider(); startHornetEncounter(); }
+    else if(event==='WS'){ spawnWaspSwarm(true); }
+}
+
+function startHornetEncounter(){
+    hornet.x=canvas.width+80;
+    hornet.y=clamp(bee.y,100,canvas.height-100);
+    hornet.health=hornet.maxHealth;
+    hornet.alive=true;
+    hornet.state='CHASE';
+    hornet.attackTimer=30;
+    hornet.hitCooldown=0;
+}
+
+// =====================================================
+// 13. SPIDER AI
+// =====================================================
+function updateSpider(){
+    if(spider.cooldown>0)spider.cooldown--;
+
+    if(!spider.active)return;
+
+    if(isRingActive() && spider.state!=="WARNING" &&
+       getDistance(bee.x,bee.y,spider.x,spider.y)<110){
+        spider.health=0;
+        spider.active=false;
+        spider.state="HIDDEN";
+        score+=500;
+        return;
+    }
+
+    if(spider.state==="WARNING"){
+        spider.warningTimer--;
+
+        // Small vibration gives the web a "something is coming" feeling.
+        spider.x=spider.anchorX+Math.sin(frame*.7)*2;
+
+        if(spider.warningTimer<=0){
+            spider.state="REVEAL";
+            spider.revealTimer=35;
+        }
+    }
+
+    else if(spider.state==="REVEAL"){
+        spider.revealTimer--;
+
+        // Spider emerges from the center of the web.
+        const targetY =
+            spider.side==="top"
+            ? spider.anchorY+spider.threadLength
+            : spider.anchorY-spider.threadLength;
+
+        spider.y += (targetY-spider.y)*.18;
+
+        if(spider.revealTimer<=0){
+            spider.state="SWING";
+            spider.swingTime=0;
+        }
+    }
+
+    else if(spider.state==="SWING"){
+        spider.swingTime++;
+
+        // Swing sideways while attached to the web.
+        const angle=Math.sin(spider.swingTime*spider.swingSpeed)*.75;
+        spider.x=spider.anchorX+Math.sin(spider.swingTime*spider.swingSpeed)*spider.swingAmount;
+
+        const verticalDirection=spider.side==="top"?1:-1;
+        spider.y=spider.anchorY+verticalDirection*
+                 Math.cos(angle)*spider.threadLength;
+
+        // After swinging, make a sudden lunge toward the bee.
+        if(spider.swingTime>95){
+            spider.state="LUNGE";
+            spider.lungeTimer=55;
+
+            const dx=bee.x-spider.x;
+            const dy=bee.y-spider.y;
+            const d=Math.hypot(dx,dy)||1;
+            spider.lungeVX=dx/d*spider.attackSpeed;
+            spider.lungeVY=dy/d*spider.attackSpeed;
+        }
+    }
+
+    else if(spider.state==="LUNGE"){
+        spider.x+=spider.lungeVX;
+        spider.y+=spider.lungeVY;
+        spider.lungeTimer--;
+
+        if(checkBeeSpiderCollision()){
+            damageBee();
+            spider.state="RETREAT";
+            spider.retreatTimer=55;
+        }
+
+        if(spider.lungeTimer<=0){
+            spider.state="RETREAT";
+            spider.retreatTimer=55;
+        }
+    }
+
+    else if(spider.state==="RETREAT"){
+        spider.retreatTimer--;
+
+        // Retreat back toward its edge.
+        if(spider.side==="top"){
+            spider.y-=4;
+        }else{
+            spider.y+=4;
+        }
+
+        if(spider.retreatTimer<=0 ||
+           spider.y<-100 ||
+           spider.y>canvas.height+100){
+            spider.active=false;
+            spider.state="HIDDEN";
+            spider.cooldown=240;
+        }
+    }
+}
+
+function checkBeeSpiderCollision(){
+    return getDistance(bee.x,bee.y,spider.x,spider.y)<60;
+}
+
+function checkStingSpiderCollision(sting){
+    return getDistance(sting.x,sting.y,spider.x,spider.y)<48;
+}
+
+
+// =====================================================
+// 14. RED WASP SWARM AI
+// =====================================================
+function spawnWaspSwarm(withSpider){
+    if(waspSwarm.active || gameOver)return;
+    waspSwarm.cooldown=0;
+
+    waspSwarm.active=true;
+    waspSwarm.wasps=[];
+    waspSwarm.kills=0;
+    waspSwarm.spiderTriggered=false;
+    waspSwarm.spiderScheduled=!!withSpider;
+
+    // A compact geometric "wave": staggered rows create predictable lanes
+    // so the player can actually fly through it.  The small offsets make it
+    // feel organic without turning the formation into random noise.
+    const startX=canvas.width+80;
+    const centerY=canvas.height*0.5;
+    const rowGap=Math.max(62,Math.min(86,canvas.height*0.095));
+    const rowOffsets=[-1.5,-0.5,0.5,1.5];
+
+    for(let row=0;row<waspSwarm.rows;row++){
+        for(let col=0;col<waspSwarm.cols;col++){
+            const stagger=(row%2)*waspSwarm.spacing*0.48;
+            const x=startX + col*waspSwarm.spacing + stagger;
+            const y=centerY + rowOffsets[row]*rowGap;
+
+            waspSwarm.wasps.push({
+                x:x,
+                y:y + (Math.random()-.5)*12,
+                width:42,
+                height:25,
+                angle:(Math.random()-.5)*0.10,
+                wingPhase:Math.random()*Math.PI*2,
+                speedOffset:(Math.random()-.5)*0.12,
+                alive:true,
+                hitCooldown:0
+            });
+        }
+    }
+}
+
+function spawnSpiderInsideSwarm(){
+    if(spider.active || gameOver)return;
+
+    spider.active=true;
+    spider.health=spider.maxHealth;
+    spider.side=Math.random()<0.5 ? "top" : "bottom";
+    spider.state="REVEAL";
+    spider.warningTimer=0;
+    spider.revealTimer=28;
+    spider.lungeTimer=0;
+    spider.retreatTimer=0;
+    spider.swingTime=0;
+
+    // Put the spider in the middle of the wasp geometry, not in front of it.
+    // This makes it visibly weave between the remaining wasps.
+    spider.anchorX=clamp(bee.x+170,180,canvas.width-130);
+    spider.anchorY=spider.side==="top" ? 20 : canvas.height-20;
+    // Inside the wasp wave the spider reaches much farther into the
+    // arena, allowing it to weave through the formation from above/below.
+    spider.threadLength=Math.min(0.47*canvas.height, Math.max(180, canvas.height*0.42));
+    spider.x=spider.anchorX;
+    spider.y=spider.side==="top" ? spider.anchorY+spider.threadLength : spider.anchorY-spider.threadLength;
+}
+
+function updateWaspSwarm(){
+    if(waspSwarm.cooldown>0)waspSwarm.cooldown--;
+
+    if(!waspSwarm.active)return;
+
+    // Once the player has opened a path by killing two wasps, the spider
+    // enters the swarm. This creates a deliberate multi-threat moment rather
+    // than spawning the spider at a random unrelated time.
+    if(waspSwarm.spiderScheduled && waspSwarm.kills>=2 && !waspSwarm.spiderTriggered && !spider.active){
+        waspSwarm.spiderTriggered=true;
+        spawnSpiderInsideSwarm();
+    }
+
+    let living=0;
+
+    for(let i=waspSwarm.wasps.length-1;i>=0;i--){
+        const wasp=waspSwarm.wasps[i];
+
+        if(!wasp.alive)continue;
+        living++;
+
+        // Rectilinear motion: straight from right to left.
+        wasp.x-=waspSwarm.speed + wasp.speedOffset;
+
+        if(wasp.hitCooldown>0)wasp.hitCooldown--;
+
+        // The magical ring destroys any wasp that touches its aura.
+        if(isRingActive() && getDistance(bee.x,bee.y,wasp.x,wasp.y)<105){
+            wasp.alive=false;
+            score+=50;
+            continue;
+        }
+
+        // Touching a wasp costs exactly one health point.
+        if(checkBeeWaspCollision(wasp) && wasp.hitCooldown<=0){
+            damageBee();
+            wasp.hitCooldown=90;
+
+            // The wasp survives the collision; the player still
+            // has to shoot it to clear the path.
+        }
+
+        // Remove wasps that have safely passed the left edge.
+        if(wasp.x < -100){
+            wasp.alive=false;
+            living--;
+        }
+    }
+
+    if(living<=0){
+        waspSwarm.active=false;
+        waspSwarm.cooldown=360;
+    }
+}
+
+function checkBeeWaspCollision(wasp){
+    return Math.abs(bee.x-wasp.x)<42 &&
+           Math.abs(bee.y-wasp.y)<32;
+}
+
+// =====================================================
+// 15. VENUS FLYTRAP SYSTEM
+// =====================================================
+function spawnFlytrapPair(){
+    const gap = flytrapSystem.minGap +
+        Math.random()*(flytrapSystem.maxGap-flytrapSystem.minGap);
+
+    // Keep the opening away from the extreme top/bottom so the bee always
+    // has a readable route through the center of the screen.
+    const margin=55;
+    const usableTop=margin;
+    const usableBottom=canvas.height-margin-gap;
+    const gapY=clamp(
+        usableTop + Math.random()*Math.max(1,usableBottom-usableTop),
+        usableTop,
+        Math.max(usableTop,usableBottom)
+    );
+
+    flytraps.push({
+        x:canvas.width+80,
+        gapY:gapY,
+        gap:gap,
+        width:flytrapSystem.width,
+        passed:false,
+        seed:Math.random()*100
+    });
+}
+
+function updateFlytraps(){
+    if(!gameStarted || gameOver)return;
+
+    flytrapSystem.spawnTimer--;
+    if(flytrapSystem.spawnTimer<=0){
+        spawnFlytrapPair();
+        flytrapSystem.spawnTimer=flytrapSystem.spawnEvery;
+    }
+
+    // Gradually increase environmental speed after each minute.
+    const minute=Math.floor(playFrame/LOOP_FRAMES);
+    flytrapSystem.speed=3.2 + Math.min(minute*0.35,2.1);
+
+    for(let i=flytraps.length-1;i>=0;i--){
+        const trap=flytraps[i];
+        trap.x-=flytrapSystem.speed;
+
+        if(!trap.passed && trap.x+trap.width<bee.x){
+            trap.passed=true;
+            flytrapsPassed();
+        }
+
+        if(isRingActive() && trap.x < bee.x+bee.width+90 && trap.x+trap.width > bee.x-90 &&
+           (bee.y < trap.gapY || bee.y+bee.height > trap.gapY+trap.gap)){
+            flytraps.splice(i,1);
+            score+=100;
+            continue;
+        }
+
+        if(checkBeeFlytrapCollision(trap)){
+            damageBee();
+        }
+
+        if(trap.x+trap.width<-80){
+            flytraps.splice(i,1);
+        }
+    }
+
+    // A simple distance meter grows continuously while alive.
+    distance += flytrapSystem.speed*0.05;
+}
+
+function flytrapsPassed(){
+    flytrapSystem.passed++;
+    score += 100;
+}
+
+function checkBeeFlytrapCollision(trap){
+    // The artwork may be compact, but the whole top/bottom plant structure
+    // is physically solid. The bee cannot sneak around its visible mouth.
+    const beeLeft=bee.x+5;
+    const beeRight=bee.x+bee.width-5;
+    const beeTop=bee.y+4;
+    const beeBottom=bee.y+bee.height-4;
+    const trapLeft=trap.x+4;
+    const trapRight=trap.x+trap.width-4;
+
+    if(beeRight<=trapLeft || beeLeft>=trapRight)return false;
+
+    const gapTop=trap.gapY;
+    const gapBottom=trap.gapY+trap.gap;
+
+    // Any overlap with either solid region is a collision.
+    return beeTop<gapTop || beeBottom>gapBottom;
+}
+
+// =====================================================
+// 16. POWER-UPS: HEART + MAGICAL RING
+// =====================================================
+function spawnPowerUp(type){
+    powerUps.push({
+        type,
+        x:canvas.width+80,
+        y:clamp(100+Math.random()*(canvas.height-220),100,canvas.height-120),
+        size:38,
+        bob:Math.random()*Math.PI*2,
+        rotation:0
+    });
+}
+
+function updatePowerUps(){
+    if(!gameStarted || gameOver)return;
+
+    // Hearts are time-balanced: the first arrives at 45 seconds, then
+    // approximately every 90 seconds. They are recovery opportunities,
+    // not frequent free health refills.
+    // The magical ring is score-driven: the FIRST ring is guaranteed
+    // at 500 points (normally within the first 30 seconds), then only
+    // after large score milestones so it remains a special advantage.
+    const t=Math.floor((playFrame % LOOP_FRAMES)/60);
+    if(powerUpEvent!==t){
+        const event=powerUpSchedule.find(p=>p.time===t);
+        if(event){
+            spawnPowerUp(event.type);
+            powerUpEvent=t;
+        }
+    }
+
+    // FIRST RING: guaranteed within the first 30 seconds, regardless of score.
+    // We use 25s so the player has time to learn the controls before receiving it.
+    if(!firstRingGiven && t>=25){
+        const ringAlreadyVisible = powerUps.some(p=>p.type==='ring');
+        if(!isRingActive() && !ringAlreadyVisible){
+            spawnPowerUp('ring');
+            firstRingGiven=true;
+        }
+    }
+
+    // AFTER THE GUARANTEED FIRST RING: rings are controlled ONLY by score.
+    // A 5,000-point interval keeps them rare enough to remain meaningful.
+    if(firstRingGiven && score>=nextRingScore && ringMilestone<nextRingScore){
+        const ringAlreadyVisible = powerUps.some(p=>p.type==='ring');
+        if(!isRingActive() && !ringAlreadyVisible){
+            spawnPowerUp('ring');
+            ringMilestone=nextRingScore;
+            nextRingScore += RING_INTERVAL_SCORE;
+        }
+    }
+
+    if(ringActiveUntil>0 && playFrame>=ringActiveUntil){
+        ringActiveUntil=0;
+    }
+
+    for(let i=powerUps.length-1;i>=0;i--){
+        const p=powerUps[i];
+        p.x-=flytrapSystem.speed*0.9;
+        p.bob+=0.07;
+        p.rotation+=0.04;
+        const py=p.y+Math.sin(p.bob)*8;
+
+        if(Math.abs(bee.x+bee.width/2-p.x)<48 &&
+           Math.abs(bee.y+bee.height/2-py)<48){
+            collectPowerUp(p.type);
+            powerUps.splice(i,1);
+            continue;
+        }
+
+        if(p.x<-80)powerUps.splice(i,1);
+    }
+}
+
+function collectPowerUp(type){
+    if(type==='heart'){
+        if(bee.health<bee.maxHealth){
+            bee.health=Math.min(bee.maxHealth,bee.health+1);
+            score+=150;
+            updateHealthDisplay();
+            showPowerUpMessage('❤️ HEALTH +1');
+        }else{
+            score+=300;
+            showPowerUpMessage('❤️ FULL HEALTH • +300');
+        }
+    }else{
+        ringActiveUntil=playFrame+POWERUP_DURATION;
+        score+=250;
+        showPowerUpMessage('💍 MAGIC RING • 11 SECONDS');
+    }
+}
+
+function isRingActive(){
+    return ringActiveUntil>playFrame;
+}
+
+function showPowerUpMessage(text){
+    message.innerHTML=text+"<br><span style='font-size:17px'>MAGICAL POWER-UP</span>";
+    message.style.display='block';
+    setTimeout(()=>{if(!gameOver)message.style.display='none';},1200);
+}
+
+function ringKillsPoint(x,y,radius){
+    return isRingActive() && getDistance(bee.x+bee.width/2,bee.y+bee.height/2,x,y)<radius;
+}
+
+// =====================================================
+// 16. DAMAGE
+// =====================================================
+function damageBee(){
+    if(isRingActive() || bee.hitCooldown>0 || gameOver)return;
+
+    bee.health--;
+    bee.hitCooldown=90;
+    bee.velocityY=-5;
+    updateHealthDisplay();
+
+    if(bee.health<=0){
+        bee.health=0;
+        showGameOver();
+    }
+}
+
+// =====================================================
+// 15. STINGS
+// =====================================================
+function updateStings(){
+    if(fireCooldown>0)fireCooldown--;
+
+    if(firing && gameStarted && !gameOver && fireCooldown<=0){
+        fireSting();
+        fireCooldown=FIRE_INTERVAL;
+    }
+
+    for(let i=stings.length-1;i>=0;i--){
+        const sting=stings[i];
+
+        // Fast projectile physics: tiny gravity + drag creates a subtle arc.
+        sting.velocityY += STING_GRAVITY;
+        sting.velocityX *= STING_DRAG;
+        sting.velocityY *= STING_DRAG;
+        sting.x += sting.velocityX;
+        sting.y += sting.velocityY;
+        sting.life++;
+
+        // IMPORTANT: Spider is NOT checked here.
+        // It cannot be killed.
+
+        if(hornet.alive && checkStingHornetCollision(sting)){
+            hornet.health--;
+            hornet.hitCooldown=15;
+            stings.splice(i,1);
+
+            if(hornet.health<=0){
+                hornet.health=0;
+                hornet.alive=false;
+                showDefeatMessage();
+            }
+            continue;
+        }
+
+        // Spider is now killable: exactly 5 successful sting hits defeat it.
+        // During the warning phase the spider has not emerged yet, so it cannot be hit.
+        if(spider.active && spider.state!=="WARNING" && checkStingSpiderCollision(sting)){
+            spider.health--;
+            stings.splice(i,1);
+
+            if(spider.health<=0){
+                spider.health=0;
+                spider.active=false;
+                spider.state="HIDDEN";
+                spider.cooldown=300;
+                score += 500;
+                showSpiderDefeatMessage();
+            }
+            continue;
+        }
+
+        // One sting = one dead red wasp.
+        let killedWasp=false;
+        for(const wasp of waspSwarm.wasps){
+            if(!wasp.alive)continue;
+
+            if(getDistance(sting.x,sting.y,wasp.x,wasp.y)<28){
+                wasp.alive=false;
+                waspSwarm.kills++;
+                stings.splice(i,1);
+                killedWasp=true;
+
+                if(waspSwarm.spiderScheduled && waspSwarm.kills>=2 && !waspSwarm.spiderTriggered && !spider.active){
+                    waspSwarm.spiderTriggered=true;
+                    spawnSpiderInsideSwarm();
+                }
+                break;
+            }
+        }
+
+        if(killedWasp)continue;
+
+        if(sting.life>sting.maxLife || sting.x<-30||sting.x>canvas.width+30||
+           sting.y<-30||sting.y>canvas.height+30){
+            stings.splice(i,1);
+        }
+    }
+}
+
+function checkStingHornetCollision(sting){
+    return getDistance(sting.x,sting.y,hornet.x,hornet.y)<40;
+}
+
+// =====================================================
+// 16. UI
+// =====================================================
+function updateHealthDisplay(){
+    let hearts="";
+    for(let i=0;i<bee.health;i++)hearts+="❤️ ";
+    if(bee.health===0)hearts="💔";
+    healthDisplay.textContent="BEE HEALTH: "+hearts;
+}
+
+function updateStatus(){
+    if(waspSwarm.active){
+        statusDisplay.textContent=waspSwarm.kills<2 ? "🔴 WASP WAVE! CLEAR 2 WASPS!" : "🕷️ SPIDER IN THE WAVE! FIND THE GAP!";
+        return;
+    }
+
+    if(!spider.active){
+        statusDisplay.textContent="";
+        return;
+    }
+
+    if(spider.state==="WARNING"){
+        statusDisplay.textContent=
+            spider.side==="top"
+            ? "🕸️ WEB ABOVE! WATCH THE CENTER!"
+            : "🕸️ WEB BELOW! WATCH THE CENTER!";
+    }
+    else if(spider.state==="SWING"){
+        statusDisplay.textContent=`🕷️ SPIDER!  ${spider.health}/${spider.maxHealth} HITS LEFT`;
+    }
+    else if(spider.state==="LUNGE"){
+        statusDisplay.textContent=`⚠️ DODGE!  SPIDER ${spider.health}/${spider.maxHealth}`;
+    }
+    else{
+        statusDisplay.textContent="";
+    }
+}
+
+function showDefeatMessage(){
+    message.innerHTML=
+        "🐝‍🔥 NEMESIS DEFEATED! 💥<br>"+
+        "<span style='font-size:18px'>The hornet will return...</span>";
+    message.style.display="block";
+
+    setTimeout(()=>{
+        if(!gameOver)message.style.display="none";
+    },1800);
+}
+
+function showSpiderDefeatMessage(){
+    message.innerHTML=
+        "🕷️ SPIDER DEFEATED! 💥<br>"+
+        "<span style='font-size:18px'>+500 SCORE • 5 HITS</span>";
+    message.style.display="block";
+
+    setTimeout(()=>{
+        if(!gameOver)message.style.display="none";
+    },1400);
+}
+
+function showGameOver(){
+    gameOver=true;
+    message.innerHTML=
+        "💥 THE BEE WAS DEFEATED 💥<br>"+
+        "<span style='font-size:20px'>Click or press SPACE to restart</span>";
+    message.style.display="block";
+}
+
+function restartGame(){
+    bee.x=250;
+    bee.y=canvas.height/2;
+    bee.velocityY=0;
+    aim.angle=0;
+    bee.health=bee.maxHealth;
+    bee.hitCooldown=0;
+
+    hornet.x=canvas.width-150;
+    hornet.y=canvas.height/2;
+    hornet.health=5;
+    hornet.alive=true;
+    hornet.state="CHASE";
+    hornet.attackTimer=0;
+
+    spider.active=false;
+    spider.state="HIDDEN";
+    spider.health=spider.maxHealth;
+    spider.cooldown=180;
+
+    waspSwarm.active=false;
+    waspSwarm.wasps=[];
+    waspSwarm.kills=0;
+    waspSwarm.spiderTriggered=false;
+    waspSwarm.spiderScheduled=false;
+    waspSwarm.cooldown=180;
+
+    stings.length=0;
+    powerUps.length=0;
+    ringActiveUntil=0;
+    firstRingGiven=false;
+    nextRingScore=5000;
+    ringMilestone=0;
+    powerUpEvent=-1;
+    flytraps.length=0;
+    flytrapSystem.spawnTimer=70;
+    flytrapSystem.passed=0;
+    score=0;
+    distance=0;
+    frame=0;
+    playFrame=0;
+    loopEvent=-1;
+    gameOver=false;
+    gameStarted=true;
+    message.style.display="none";
+    updateHealthDisplay();
+}
+
+// =====================================================
+// 17. DRAW BEE
+// =====================================================
+function drawBee(){
+    ctx.save();
+    ctx.translate(bee.x,bee.y);
+
+    if(bee.hitCooldown>0 && Math.floor(bee.hitCooldown/6)%2===0)
+        ctx.globalAlpha=.35;
+
+    ctx.fillStyle="#FFD21F";
+    ctx.beginPath();
+    ctx.ellipse(0,0,30,20,0,0,Math.PI*2);
+    ctx.fill();
+
+    ctx.strokeStyle="#222";
+    ctx.lineWidth=5;
+
+    ctx.beginPath();
+    ctx.moveTo(-10,-18);ctx.lineTo(-10,18);ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(5,-18);ctx.lineTo(5,18);ctx.stroke();
+
+    ctx.fillStyle="black";
+    ctx.beginPath();
+    ctx.arc(22,-7,4,0,Math.PI*2);
+    ctx.fill();
+
+    ctx.fillStyle="rgba(255,255,255,.7)";
+    ctx.beginPath();
+    ctx.ellipse(-5,-20,15,8,-.3,0,Math.PI*2);
+    ctx.fill();
+
+    ctx.restore();
+}
+
+// =====================================================
+// 18. DRAW HORNET
+// =====================================================
+function drawHornet(){
+    if(!hornet.alive)return;
+
+    ctx.save();
+    ctx.translate(hornet.x,hornet.y);
+
+    if(hornet.state==="ATTACK"){
+        ctx.shadowBlur=18;
+        ctx.shadowColor="red";
+    }
+
+    ctx.fillStyle="#3b3b3b";
+    ctx.beginPath();
+    ctx.ellipse(0,0,35,22,0,0,Math.PI*2);
+    ctx.fill();
+
+    ctx.strokeStyle="#f5c400";
+    ctx.lineWidth=6;
+
+    ctx.beginPath();
+    ctx.moveTo(-10,-20);ctx.lineTo(-10,20);ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(8,-20);ctx.lineTo(8,20);ctx.stroke();
+
+    ctx.fillStyle="red";
+    ctx.beginPath();
+    ctx.arc(28,-7,5,0,Math.PI*2);
+    ctx.fill();
+
+    ctx.fillStyle="rgba(255,255,255,.45)";
+    ctx.beginPath();
+    ctx.ellipse(0,-25,18,9,-.2,0,Math.PI*2);
+    ctx.fill();
+
+    ctx.shadowBlur=0;
+    ctx.restore();
+
+    drawHornetHealth();
+}
+
+function drawHornetHealth(){
+    const barWidth=100,barHeight=10;
+    const x=hornet.x-barWidth/2;
+    const y=hornet.y-45;
+
+    ctx.fillStyle="#333";
+    ctx.fillRect(x,y,barWidth,barHeight);
+
+    ctx.fillStyle="#e63946";
+    ctx.fillRect(
+        x,y,
+        barWidth*(hornet.health/hornet.maxHealth),
+        barHeight
+    );
+
+    ctx.fillStyle="#222";
+    ctx.font="bold 12px Arial";
+    ctx.textAlign="center";
+    ctx.fillText(hornet.state,hornet.x,y-5);
+}
+
+// =====================================================
+// 20. DRAW SPIDER WEB
+// =====================================================
+function drawSpiderWeb(){
+    if(!spider.active)return;
+
+    const cx=spider.anchorX;
+    const cy=spider.anchorY;
+    const r=spider.webRadius;
+
+    ctx.save();
+
+    // Warning pulse
+    let alpha=.35;
+    if(spider.state==="WARNING"){
+        alpha=.25+Math.abs(Math.sin(frame*.18))*.55;
+    }
+
+    ctx.strokeStyle=`rgba(245,245,245,${alpha})`;
+    ctx.lineWidth=2;
+
+    // Radial threads
+    for(let i=0;i<12;i++){
+        const a=(Math.PI*2/12)*i;
+        ctx.beginPath();
+        ctx.moveTo(cx,cy);
+        ctx.lineTo(cx+Math.cos(a)*r,cy+Math.sin(a)*r);
+        ctx.stroke();
+    }
+
+    // Concentric web rings
+    for(let ring=1;ring<=4;ring++){
+        ctx.beginPath();
+
+        for(let i=0;i<=32;i++){
+            const a=(Math.PI*2/32)*i;
+            const rr=r*(ring/4);
+            const x=cx+Math.cos(a)*rr;
+            const y=cy+Math.sin(a)*rr;
+
+            if(i===0)ctx.moveTo(x,y);
+            else ctx.lineTo(x,y);
+        }
+
+        ctx.stroke();
+    }
+
+    // Connecting web glow
+    if(spider.state==="WARNING"){
+        ctx.shadowBlur=15;
+        ctx.shadowColor="white";
+        ctx.strokeStyle=`rgba(255,255,255,${alpha})`;
+        ctx.beginPath();
+        ctx.arc(cx,cy,r*.35,0,Math.PI*2);
+        ctx.stroke();
+    }
+
+    ctx.restore();
+}
+
+// =====================================================
+// 20. DRAW SPIDER
+// =====================================================
+function drawSpider(){
+    if(!spider.active)return;
+
+    // Web first
+    drawSpiderWeb();
+
+    if(spider.state==="WARNING")return;
+
+    ctx.save();
+
+    // Web thread to spider while attached
+    if(spider.state==="REVEAL"||spider.state==="SWING"){
+        ctx.strokeStyle="rgba(245,245,245,.85)";
+        ctx.lineWidth=3;
+        ctx.beginPath();
+        ctx.moveTo(spider.anchorX,spider.anchorY);
+        ctx.lineTo(spider.x,spider.y);
+        ctx.stroke();
+    }
+
+    ctx.translate(spider.x,spider.y);
+
+    if(spider.state==="LUNGE"){
+        ctx.shadowBlur=25;
+        ctx.shadowColor="red";
+    }
+
+    // Legs
+    ctx.strokeStyle="#211515";
+    ctx.lineWidth=5;
+    ctx.lineCap="round";
+
+    const legAngles=[
+        [-1,-.5],[-1,-.15],[-1,.2],[-1,.55],
+        [1,-.5],[1,-.15],[1,.2],[1,.55]
+    ];
+
+    for(const [sx,sy] of legAngles){
+        ctx.beginPath();
+        ctx.moveTo(sx*20,sy*12);
+        ctx.lineTo(sx*42,sy*25);
+        ctx.lineTo(sx*55,sy*12);
+        ctx.stroke();
+    }
+
+    // Body
+    ctx.fillStyle="#241515";
+    ctx.beginPath();
+    ctx.ellipse(0,0,27,32,0,0,Math.PI*2);
+    ctx.fill();
+
+    // Abdomen markings
+    ctx.fillStyle="#8b1e1e";
+    ctx.beginPath();
+    ctx.ellipse(0,12,14,17,0,0,Math.PI*2);
+    ctx.fill();
+
+    // Eyes
+    ctx.fillStyle="#ffdf3f";
+    ctx.beginPath();
+    ctx.arc(-9,-12,6,0,Math.PI*2);
+    ctx.arc(9,-12,6,0,Math.PI*2);
+    ctx.fill();
+
+    ctx.fillStyle="#111";
+    ctx.beginPath();
+    ctx.arc(-9,-12,2.5,0,Math.PI*2);
+    ctx.arc(9,-12,2.5,0,Math.PI*2);
+    ctx.fill();
+
+    ctx.shadowBlur=0;
+    ctx.restore();
+
+    // Five-hit health bar above the spider. Each successful sting removes one segment.
+    const barW=76;
+    const barH=7;
+    const barX=spider.x-barW/2;
+    const barY=spider.y-62;
+    ctx.fillStyle="rgba(0,0,0,.65)";
+    ctx.fillRect(barX,barY,barW,barH);
+    const filled=barW*(spider.health/spider.maxHealth);
+    if(filled>0){
+        ctx.fillStyle="#ff4b4b";
+        ctx.fillRect(barX,barY,filled,barH);
+    }
+    ctx.strokeStyle="rgba(255,255,255,.8)";
+    ctx.lineWidth=1;
+    ctx.strokeRect(barX,barY,barW,barH);
+}
+
+
+// =====================================================
+// 21. DRAW RED WASP SWARM
+// =====================================================
+function drawWaspSwarm(){
+    if(!waspSwarm.active)return;
+
+    for(const wasp of waspSwarm.wasps){
+        if(!wasp.alive)continue;
+
+        ctx.save();
+        ctx.translate(wasp.x,wasp.y);
+        ctx.rotate(wasp.angle);
+
+        if(wasp.hitCooldown>0 && Math.floor(wasp.hitCooldown/6)%2===0){
+            ctx.globalAlpha=.42;
+        }
+
+        // Animated wings make the swarm feel alive without changing its
+        // straight-line flight path.
+        const flap=Math.sin(frame*.34+wasp.wingPhase)*2.5;
+
+        // Wings
+        ctx.fillStyle="rgba(235,245,255,.62)";
+        ctx.strokeStyle="rgba(80,110,125,.55)";
+        ctx.lineWidth=1.5;
+
+        ctx.beginPath();
+        ctx.ellipse(-5,-13-flap,18,8,-.42,0,Math.PI*2);
+        ctx.fill(); ctx.stroke();
+
+        ctx.beginPath();
+        ctx.ellipse(5,13+flap,18,8,.42,0,Math.PI*2);
+        ctx.fill(); ctx.stroke();
+
+        // Black head
+        ctx.fillStyle="#17120f";
+        ctx.beginPath();
+        ctx.arc(18,0,9,0,Math.PI*2);
+        ctx.fill();
+
+        // Yellow/orange face
+        ctx.fillStyle="#f4b928";
+        ctx.beginPath();
+        ctx.arc(20,-2,3.3,0,Math.PI*2);
+        ctx.fill();
+
+        // Large aggressive body
+        ctx.fillStyle="#e22b20";
+        ctx.beginPath();
+        ctx.ellipse(-3,0,24,12,0,0,Math.PI*2);
+        ctx.fill();
+
+        // Black bands
+        ctx.strokeStyle="#241612";
+        ctx.lineWidth=4;
+        for(const bx of [-12,-3,6]){
+            ctx.beginPath();
+            ctx.moveTo(bx,-10);
+            ctx.lineTo(bx,10);
+            ctx.stroke();
+        }
+
+        // Sharp rear stinger
+        ctx.fillStyle="#211313";
+        ctx.beginPath();
+        ctx.moveTo(-25,0);
+        ctx.lineTo(-38,-5);
+        ctx.lineTo(-34,0);
+        ctx.lineTo(-38,5);
+        ctx.closePath();
+        ctx.fill();
+
+        // Antennae
+        ctx.strokeStyle="#241612";
+        ctx.lineWidth=2;
+        ctx.beginPath();
+        ctx.moveTo(23,-5);ctx.lineTo(32,-12);ctx.lineTo(36,-10);
+        ctx.moveTo(23,3);ctx.lineTo(32,10);ctx.lineTo(36,8);
+        ctx.stroke();
+
+        // Eye
+        ctx.fillStyle="#ff4b35";
+        ctx.beginPath();
+        ctx.arc(23,-3,2,0,Math.PI*2);
+        ctx.fill();
+
+        ctx.restore();
+    }
+}
+
+// =====================================================
+// 22. DRAW STINGS
+// =====================================================
+function drawStings(){
+    for(const sting of stings){
+        const speed=Math.hypot(sting.velocityX,sting.velocityY);
+        const ux=sting.velocityX/speed;
+        const uy=sting.velocityY/speed;
+
+        ctx.save();
+        ctx.lineCap="round";
+        ctx.shadowBlur=14;
+        ctx.shadowColor="gold";
+        ctx.strokeStyle="rgba(255,220,70,.55)";
+        ctx.lineWidth=3;
+        ctx.beginPath();
+        ctx.moveTo(sting.x-ux*14,sting.y-uy*14);
+        ctx.lineTo(sting.x,sting.y);
+        ctx.stroke();
+
+        ctx.fillStyle="#FFD700";
+        ctx.beginPath();
+        ctx.arc(sting.x,sting.y,sting.radius,0,Math.PI*2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+// =====================================================
+// 23. AIM
+// =====================================================
+function drawAimLine(){
+    syncAimMouseToAngle();
+    const startX=bee.x+bee.width*.5;
+    const startY=bee.y+bee.height*.5;
+    const guide=150;
+    const ux=Math.cos(aim.angle), uy=Math.sin(aim.angle);
+
+    ctx.strokeStyle="rgba(255,255,255,.30)";
+    ctx.lineWidth=2;
+    ctx.setLineDash([8,8]);
+    ctx.beginPath();
+    ctx.moveTo(startX,startY);
+    ctx.lineTo(startX+ux*guide,startY+uy*guide);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle="rgba(255,224,82,.95)";
+    ctx.beginPath();
+    ctx.arc(startX+ux*guide,startY+uy*guide,5,0,Math.PI*2);
+    ctx.fill();
+}
+
+// =====================================================
+// 24. DRAW VENUS FLYTRAPS
+// =====================================================
+function drawFlytrapPair(trap){
+    const topEnd=trap.gapY;
+    const bottomStart=trap.gapY+trap.gap;
+    const sway=Math.sin(frame*.025+trap.seed)*3;
+
+    // The plant still occupies the complete top/bottom solid regions.
+    // Only its visible organic body is compact, so the screen feels much less crowded.
+    drawFlytrap(trap.x, topEnd, trap.width, true, sway, trap.seed);
+    drawFlytrap(trap.x, canvas.height-bottomStart, trap.width, false, sway, trap.seed+2);
+}
+
+function drawFlytrap(x, length, width, top, sway, seed){
+    ctx.save();
+    ctx.translate(x, top ? 0 : canvas.height);
+
+    const direction=top ? 1 : -1;
+    const bodyLength=Math.max(85,length);
+    const mouthY=direction*bodyLength;
+    const mouthCenterX=width*.5+sway;
+
+    // OPAQUE stem: no transparency in the blocking structure.
+    ctx.strokeStyle='#23652a';
+    ctx.lineWidth=20;
+    ctx.lineCap='round';
+    ctx.beginPath();
+    ctx.moveTo(width*.50, direction*bodyLength*.05);
+    ctx.quadraticCurveTo(width*.42+sway, direction*bodyLength*.42, mouthCenterX, mouthY);
+    ctx.stroke();
+
+    // OPAQUE leaf body.
+    ctx.shadowBlur=10;
+    ctx.shadowColor='rgba(0,0,0,.25)';
+    ctx.fillStyle='#4f9d28';
+    ctx.beginPath();
+    if(top){
+        ctx.moveTo(width*.16,0);
+        ctx.quadraticCurveTo(width*.08,bodyLength*.34,width*.20,bodyLength*.68);
+        ctx.quadraticCurveTo(width*.30,bodyLength*.90,mouthCenterX,bodyLength);
+        ctx.quadraticCurveTo(width*.70,bodyLength*.90,width*.82,bodyLength*.68);
+        ctx.quadraticCurveTo(width*.94,bodyLength*.34,width*.84,0);
+    }else{
+        ctx.moveTo(width*.16,0);
+        ctx.quadraticCurveTo(width*.08,-bodyLength*.34,width*.20,-bodyLength*.68);
+        ctx.quadraticCurveTo(width*.30,-bodyLength*.90,mouthCenterX,-bodyLength);
+        ctx.quadraticCurveTo(width*.70,-bodyLength*.90,width*.82,-bodyLength*.68);
+        ctx.quadraticCurveTo(width*.94,-bodyLength*.34,width*.84,0);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.shadowBlur=0;
+
+    // Dark mouth.
+    const mouthW=width*.90;
+    const mouthH=Math.min(125,Math.max(80,bodyLength*.38));
+    ctx.fillStyle='#8f1e2c';
+    ctx.strokeStyle='#d7ec58';
+    ctx.lineWidth=6;
+    ctx.beginPath();
+    ctx.ellipse(mouthCenterX,mouthY,mouthW*.42,mouthH*.40,0,0,Math.PI*2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Inner red rim.
+    ctx.strokeStyle='#ff6a55';
+    ctx.lineWidth=3;
+    ctx.beginPath();
+    ctx.ellipse(mouthCenterX,mouthY,mouthW*.31,mouthH*.28,0,0,Math.PI*2);
+    ctx.stroke();
+
+    // Teeth clearly show the physical trap boundary.
+    const teeth=11;
+    ctx.fillStyle='#f3efbd';
+    for(let i=0;i<teeth;i++){
+        const t=i/(teeth-1);
+        const tx=mouthCenterX-mouthW*.39+t*mouthW*.78;
+        const edgeY=mouthY+(top?-mouthH*.33:mouthH*.33);
+        const toothH=17+Math.sin(i*1.7+seed)*3;
+        ctx.beginPath();
+        if(top){
+            ctx.moveTo(tx-4,edgeY); ctx.lineTo(tx,edgeY+toothH); ctx.lineTo(tx+4,edgeY);
+        }else{
+            ctx.moveTo(tx-4,edgeY); ctx.lineTo(tx,edgeY-toothH); ctx.lineTo(tx+4,edgeY);
+        }
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    // Leaf veins/highlights, also fully opaque.
+    ctx.strokeStyle='#78c83e';
+    ctx.lineWidth=3;
+    for(let i=0;i<4;i++){
+        const yy=direction*(bodyLength*(.22+i*.14));
+        ctx.beginPath();
+        ctx.moveTo(width*.50,yy);
+        ctx.lineTo(width*(.18+.13*i),yy-direction*22);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(width*.50,yy);
+        ctx.lineTo(width*(.82-.13*i),yy-direction*18);
+        ctx.stroke();
+    }
+
+    ctx.restore();
+}
+
+function drawPowerUps(){
+    for(const p of powerUps){
+        const y=p.y+Math.sin(p.bob)*8;
+        ctx.save();
+        ctx.translate(p.x,y);
+        ctx.rotate(Math.sin(p.rotation)*0.08);
+        ctx.shadowBlur=20;
+        ctx.shadowColor=p.type==='heart'?'#ff4b70':'#ffd83d';
+        ctx.fillStyle='#c98b45';
+        ctx.fillRect(-24,-24,48,48);
+        ctx.strokeStyle='#ffe7a0';
+        ctx.lineWidth=3;
+        ctx.strokeRect(-24,-24,48,48);
+        ctx.fillStyle=p.type==='heart'?'#ff365f':'#ffe15a';
+        ctx.font='30px Arial';
+        ctx.textAlign='center';
+        ctx.textBaseline='middle';
+        ctx.fillText(p.type==='heart'?'♥':'💍',0,2);
+        ctx.restore();
+    }
+}
+
+function drawRingAura(){
+    if(!isRingActive())return;
+    const remaining=Math.ceil((ringActiveUntil-playFrame)/60);
+
+    // bee.x / bee.y are the bee's actual visual centre, so the aura is
+    // deliberately centred on exactly that point.
+    const cx=bee.x, cy=bee.y;
+    const radius=78;
+
+    ctx.save();
+    ctx.translate(cx,cy);
+    ctx.rotate(frame*.035);
+
+    // Soft magical glow
+    const glow=ctx.createRadialGradient(0,0,30,0,0,radius+18);
+    glow.addColorStop(0,'rgba(255,230,80,.10)');
+    glow.addColorStop(.65,'rgba(255,215,55,.16)');
+    glow.addColorStop(1,'rgba(255,215,55,0)');
+    ctx.fillStyle=glow;
+    ctx.beginPath();
+    ctx.arc(0,0,radius+18,0,Math.PI*2);
+    ctx.fill();
+
+    ctx.strokeStyle='rgba(255,215,55,.98)';
+    ctx.lineWidth=6;
+    ctx.shadowBlur=24;
+    ctx.shadowColor='#ffd83d';
+    ctx.beginPath();
+    ctx.arc(0,0,radius,0,Math.PI*2);
+    ctx.stroke();
+
+    ctx.strokeStyle='rgba(255,246,180,.72)';
+    ctx.lineWidth=2;
+    ctx.shadowBlur=0;
+    ctx.beginPath();
+    ctx.arc(0,0,radius+9,0,Math.PI*2);
+    ctx.stroke();
+
+    for(let i=0;i<12;i++){
+        const a=frame*.05+i*Math.PI*2/12;
+        ctx.fillStyle='#ffe66d';
+        ctx.beginPath();
+        ctx.arc(Math.cos(a)*(radius+2),Math.sin(a)*(radius+2),3.5,0,Math.PI*2);
+        ctx.fill();
+    }
+    ctx.restore();
+
+    ctx.fillStyle='#fff4a3';
+    ctx.font='bold 16px Arial';
+    ctx.textAlign='center';
+    ctx.fillText('💍 '+remaining+'s',cx,bee.y-48);
+}
+
+function drawFlytraps(){
+    for(const trap of flytraps)drawFlytrapPair(trap);
+}
+
+function drawScore(){
+    const seconds=Math.floor(playFrame/60);
+    const mins=Math.floor(seconds/60);
+    const secs=seconds%60;
+    const time=String(mins).padStart(2,'0')+':'+String(secs).padStart(2,'0');
+    const cycle=Math.floor(playFrame/LOOP_FRAMES)+1;
+    scoreDisplay.textContent=`SCORE: ${score}   |   TIME: ${time}   |   DISTANCE: ${Math.floor(distance)}m   |   CYCLE: ${cycle}`;
+}
+
+// =====================================================
+// 25. BACKGROUND
+// =====================================================
+function drawBackground(){
+    // Sky gradient
+    const sky=ctx.createLinearGradient(0,0,0,canvas.height);
+    sky.addColorStop(0,'#55bde8');
+    sky.addColorStop(.55,'#a8e3f3');
+    sky.addColorStop(1,'#d6f3c5');
+    ctx.fillStyle=sky;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    // Distant hills
+    ctx.fillStyle='rgba(57,130,78,.28)';
+    ctx.beginPath();
+    ctx.moveTo(0,canvas.height*.58);
+    for(let x=0;x<=canvas.width;x+=120){
+        const y=canvas.height*.48 + Math.sin(x*.004)*45;
+        ctx.lineTo(x,y);
+    }
+    ctx.lineTo(canvas.width,canvas.height);
+    ctx.lineTo(0,canvas.height);
+    ctx.closePath();
+    ctx.fill();
+
+    // Soft clouds
+    ctx.fillStyle='rgba(255,255,255,.58)';
+    for(let x=70;x<canvas.width+200;x+=280){
+        const drift=Math.sin(frame*.002+x)*10;
+        ctx.beginPath();
+        ctx.arc(x+drift,105,26,0,Math.PI*2);
+        ctx.arc(x+32+drift,96,38,0,Math.PI*2);
+        ctx.arc(x+72+drift,108,25,0,Math.PI*2);
+        ctx.fill();
+    }
+
+    // Midground foliage silhouettes.
+    ctx.fillStyle='rgba(31,113,55,.35)';
+    for(let x=-40;x<canvas.width+80;x+=95){
+        const h=55+((x*17)%55);
+        ctx.beginPath();
+        ctx.ellipse(x,canvas.height-75,h*.55,h,0,0,Math.PI*2);
+        ctx.fill();
+    }
+
+    // Ground / jungle floor.
+    ctx.fillStyle='#3d8e3c';
+    ctx.fillRect(0,canvas.height-62,canvas.width,62);
+
+    // Foreground leaves.
+    ctx.fillStyle='rgba(26,103,42,.78)';
+    for(let x=-50;x<canvas.width+80;x+=150){
+        ctx.save();
+        ctx.translate(x,canvas.height-25);
+        ctx.rotate(Math.sin(frame*.006+x)*.08);
+        ctx.beginPath();
+        ctx.ellipse(0,0,80,22,-.25,0,Math.PI*2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+
+// =====================================================
+// 25. GAME LOOP
+// =====================================================
+function gameLoop(){
+    frame++;
+    if(gameStarted && !gameOver){
+        playFrame++;
+
+        // IMPORTANT: this is a gameplay cycle, NOT a game restart.
+        // At 120 seconds we simply begin the next encounter pattern.
+        if(playFrame > 0 && playFrame % LOOP_FRAMES === 0){
+            loopEvent=-1;
+            powerUpEvent=-1;
+            // Keep score-based ring progression continuous across loops.
+            // End of the six-minute choreography: start the same gameplay
+            // pattern again without resetting the run, score or health.
+            hornet.alive=false;
+            hornet.state='HIDDEN';
+            spider.active=false;
+            spider.state='HIDDEN';
+            waspSwarm.active=false;
+            waspSwarm.wasps.length=0;
+            waspSwarm.kills=0;
+            waspSwarm.spiderTriggered=false;
+            waspSwarm.spiderScheduled=false;
+            powerUps.length=0;
+        }
+    }
+
+    drawBackground();
+
+    if(!gameOver){
+        updateBee();
+        updatePowerUps();
+        updateFlytraps();
+        updateNemesisSchedule();
+        updateHornet();
+        updateSpider();
+        updateWaspSwarm();
+        updateStings();
+    }
+
+    drawFlytraps();
+    drawPowerUps();
+    drawSpider();
+    drawWaspSwarm();
+    drawAimLine();
+    drawRingAura();
+    drawBee();
+    drawHornet();
+    drawStings();
+
+    updateStatus();
+    drawScore();
+
+    requestAnimationFrame(gameLoop);
+}
+
+// =====================================================
+// 26. START
+// =====================================================
+resizeCanvas();
+updateHealthDisplay();
+gameLoop();
+</script>
+</body>
+</html>
